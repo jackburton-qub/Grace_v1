@@ -1,0 +1,166 @@
+name: Build Windows, Mac, and Linux Executables
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger only on version tags (e.g., v1.0.0, v2.1.3)
+
+# Needed so softprops/action-gh-release can create/update the release and
+# upload build artifacts. Without this, GitHub's default token permissions
+# (read-only on most repos since the platform-wide default changed) cause
+# the upload step to fail with a 403, even though everything else builds
+# successfully — easy to miss since the build itself looks fine right up
+# until the very last step.
+permissions:
+  contents: write
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Windows
+  # ---------------------------------------------------------------------------
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download and extract BLAST+ binaries (Windows)
+        shell: powershell
+        run: |
+          $url = "https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.17.0/ncbi-blast-2.17.0%2B-x64-win64.tar.gz"
+          Invoke-WebRequest -Uri $url -OutFile blast.tar.gz
+          tar -xzf blast.tar.gz
+          New-Item -ItemType Directory -Force -Path blast\windows
+          Copy-Item "ncbi-blast-2.17.0+\bin\blastn.exe"               blast\windows\
+          Copy-Item "ncbi-blast-2.17.0+\bin\blastn.exe.manifest"      blast\windows\
+          Copy-Item "ncbi-blast-2.17.0+\bin\makeblastdb.exe"          blast\windows\
+          Copy-Item "ncbi-blast-2.17.0+\bin\makeblastdb.exe.manifest" blast\windows\
+          if (Test-Path "ncbi-blast-2.17.0+\bin\ncbi-vdb-md.dll") {
+            Copy-Item "ncbi-blast-2.17.0+\bin\ncbi-vdb-md.dll" blast\windows\
+          }
+          if (Test-Path "ncbi-blast-2.17.0+\bin\nghttp2.dll") {
+            Copy-Item "ncbi-blast-2.17.0+\bin\nghttp2.dll" blast\windows\
+          }
+
+      - name: Build executable
+        run: python build.py --no-upx
+
+      - name: Zip release folder
+        run: Compress-Archive -Path dist\GRACE -DestinationPath dist\GRACE-Windows-x64.zip
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/GRACE-Windows-x64.zip
+
+  # ---------------------------------------------------------------------------
+  # macOS
+  # ---------------------------------------------------------------------------
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download BLAST+ binaries (macOS)
+        run: |
+          curl -o blast.tar.gz "https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.17.0/ncbi-blast-2.17.0%2B-universal-macosx.tar.gz"
+          tar -xzf blast.tar.gz
+          mkdir -p blast/macos
+          cp ncbi-blast-2.17.0+/bin/blastn      blast/macos/
+          cp ncbi-blast-2.17.0+/bin/makeblastdb blast/macos/
+          chmod +x blast/macos/blastn
+          chmod +x blast/macos/makeblastdb
+
+      - name: Build executable
+        run: python build.py --no-upx
+
+      - name: Zip app bundle
+        run: |
+          if [ -d "dist/GRACE/GRACE.app" ]; then
+            ditto -c -k --sequesterRsrc --keepParent dist/GRACE/GRACE.app dist/GRACE-macOS.zip
+          else
+            ditto -c -k --sequesterRsrc --keepParent dist/GRACE.app dist/GRACE-macOS.zip
+          fi
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/GRACE-macOS.zip
+
+  # ---------------------------------------------------------------------------
+  # Linux
+  # ---------------------------------------------------------------------------
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-xinerama0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxkbcommon-x11-0 \
+            libdbus-1-3 \
+            libegl1 \
+            libfontconfig1 \
+            libgl1
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download BLAST+ binaries (Linux)
+        run: |
+          curl -o blast.tar.gz "https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.17.0/ncbi-blast-2.17.0+-x64-linux.tar.gz"
+          tar -xzf blast.tar.gz
+          mkdir -p blast/linux
+          cp ncbi-blast-2.17.0+/bin/blastn      blast/linux/
+          cp ncbi-blast-2.17.0+/bin/makeblastdb blast/linux/
+          chmod +x blast/linux/blastn
+          chmod +x blast/linux/makeblastdb
+
+      - name: Build executable
+        run: python build.py --no-upx
+
+      - name: Create tarball
+        run: |
+          cd dist
+          tar -czf GRACE-Linux-x64.tar.gz GRACE/
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/GRACE-Linux-x64.tar.gz

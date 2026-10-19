@@ -1,0 +1,50 @@
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ── Virtual environments ────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── PyInstaller build output ────────────────────────────
+build/
+dist/
+*.spec.bak
+
+# ── OS / editor cruft ───────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# ── Logs / temp ─────────────────────────────────────────
+*.log
+*.tmp
+.pytest_cache/
+
+# ── User data / large test files (adjust as needed) ─────
+*.fasta
+*.fa
+*.fastq
+*.fq
+*.gb
+*.gbff
+*.gbk
+*.gff
+*.gff3
+*.gtf
+!tests/**/*.fasta
+!tests/**/*.gff*
+
+# ── Explicitly KEEP the bundled BLAST+ binaries ─────────
+# GRACE ships blastn.exe / makeblastdb.exe so users don't need
+# to install BLAST+ separately — these must stay tracked.
+!blast/
+!blast/**
+
